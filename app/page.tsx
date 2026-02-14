@@ -4,6 +4,7 @@ import React from "react";
 import { useEffect } from "react";
 import {
   useEssayStore,
+  useFileSuffixStore,
   useFeedbackStore,
   useFeedbackCategoryDistributionStore,
   useFeedbackSummaryStore,
@@ -58,6 +59,7 @@ function setDistributionFromFeedback(
 
 const Upload = () => {
   useEffect(() => {
+    useFileSuffixStore.getState().setFileSuffix("");
     eventTracker({
       event: "view_home_page",
     });

@@ -7,7 +7,11 @@ import { Button } from "flowbite-react";
 import DragAndDrop from "./DragAndDrop";
 import { noto_serif } from "@/app/fonts";
 import { FeedbackSourceItem, Sentence } from "@/lib/type";
-import { useEssayStore, useOpenAIAPIStore } from "@/lib/store";
+import {
+  useEssayStore,
+  useFileSuffixStore,
+  useOpenAIAPIStore,
+} from "@/lib/store";
 
 type FileUploaderProps = {
   onClick: (
@@ -17,6 +21,7 @@ type FileUploaderProps = {
 };
 
 const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024;
+const PARTICIPANT_ID_REGEX = /^[a-zA-Z0-9_-]{1,32}$/;
 
 function isPdf(file: File): boolean {
   const ext = file.name.split(".").pop()?.toLowerCase();
@@ -113,11 +118,13 @@ export function FileUploader(props: FileUploaderProps) {
 
   const API = useOpenAIAPIStore((state) => state.API);
   const setAPI = useOpenAIAPIStore((state) => state.setAPI);
+  const setFileSuffix = useFileSuffixStore((state) => state.setFileSuffix);
 
   const setEssayStore = useEssayStore((s) => s.setEssay);
 
   const [essay, setEssay] = useState<FileList | null>();
   const [essayText, setEssayText] = useState<string>("");
+  const [participantId, setParticipantId] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
   const [uploadError, setUploadError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -156,8 +163,13 @@ export function FileUploader(props: FileUploaderProps) {
   }, [essay]);
 
   const canStart = useMemo(() => {
-    return API.trim() !== "" && essayText.trim().length > 0;
-  }, [API, essayText]);
+    const normalizedId = participantId.trim();
+    return (
+      API.trim() !== "" &&
+      essayText.trim().length > 0 &&
+      PARTICIPANT_ID_REGEX.test(normalizedId)
+    );
+  }, [API, essayText, participantId]);
 
   return (
     <div className="grid grid-cols-2 gap-2 p-8 bg-white rounded-lg border border-gray-800 w-[512px] select-none mb-32">
@@ -179,6 +191,20 @@ export function FileUploader(props: FileUploaderProps) {
       <div className="flex flex-col gap-2 col-span-2">
         <input
           type="text"
+          value={participantId}
+          placeholder="Participant ID (e.g. p01)"
+          onChange={(event) => setParticipantId(event.target.value)}
+          className="w-full p-2 border text-sm border-gray-300 rounded-lg grow-0"
+        />
+        {participantId.trim() !== "" &&
+        !PARTICIPANT_ID_REGEX.test(participantId.trim()) ? (
+          <p className="text-xs text-red-500">
+            ID 只能包含字母、数字、下划线或短横线，且最多 32 位。
+          </p>
+        ) : null}
+
+        <input
+          type="text"
           value={API}
           placeholder="Your OpenAI API Key..."
           onChange={handleAPIInputChange}
@@ -190,6 +216,8 @@ export function FileUploader(props: FileUploaderProps) {
           className="w-full"
           disabled={!canStart || isSubmitting}
           onClick={async () => {
+            const normalizedId = participantId.trim();
+            setFileSuffix(normalizedId);
             setEssayStore(parseEssayTextToSentences(essayText));
             setIsSubmitting(true);
             try {

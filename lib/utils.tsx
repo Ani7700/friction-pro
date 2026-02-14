@@ -28,6 +28,7 @@ export function eventTracker(
 ) {
   try {
     if (process.env.NODE_ENV !== "production") return;
+    if (!id?.trim()) return;
     // console.log('event:', event);
     const refId = ref(database, "events/" + id);
     let newEvent: object = {};

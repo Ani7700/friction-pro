@@ -43,7 +43,7 @@ export type FileSuffixActions = {
 export const useFileSuffixStore = create<FileSuffixState & FileSuffixActions>()(
   persist(
     (set) => ({
-      fileSuffix: "p0_2",
+      fileSuffix: "",
       setFileSuffix: (suffix: string) => set({ fileSuffix: suffix }),
     }),
     { name: "file-suffix", skipHydration: false },
