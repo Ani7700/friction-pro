@@ -37,7 +37,6 @@ export async function POST(req: Request) {
     const loadingTask = pdfjs.getDocument({
       data: bytes,
       useSystemFonts: true,
-      disableWorker: true,
     });
     const pdf = await loadingTask.promise;
     const pages: string[] = [];
