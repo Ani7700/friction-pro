@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024;
 
 let workerInitialized = false;
 
@@ -28,11 +31,18 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+    const upload = file as { size?: number; arrayBuffer: () => Promise<ArrayBuffer> };
+    if (typeof upload.size === "number" && upload.size > MAX_FILE_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "File is too large. Please upload a PDF up to 4.5MB." },
+        { status: 413 },
+      );
+    }
 
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
     await ensurePdfJsWorker();
     const bytes = new Uint8Array(
-      await (file as { arrayBuffer: () => Promise<ArrayBuffer> }).arrayBuffer(),
+      await upload.arrayBuffer(),
     );
     const loadingTask = pdfjs.getDocument({
       data: bytes,

@@ -16,6 +16,8 @@ type FileUploaderProps = {
   ) => void | Promise<void>;
 };
 
+const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024;
+
 function isPdf(file: File): boolean {
   const ext = file.name.split(".").pop()?.toLowerCase();
   return file.type === "application/pdf" || ext === "pdf";
@@ -51,6 +53,9 @@ async function extractPdfText(file: File): Promise<string> {
 }
 
 async function extractEssayText(file: File): Promise<string> {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error("File is too large. Please upload a file up to 4.5MB.");
+  }
   if (isPdf(file)) return extractPdfText(file);
   if (!isSupportedTextFile(file)) {
     throw new Error("Only .txt, .tex, .md, and .pdf files are supported.");

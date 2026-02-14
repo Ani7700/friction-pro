@@ -93,7 +93,7 @@ export default function DragAndDrop({ filesSetter }: DragAndDropProps) {
             <span className="font-semibold">Click to upload</span> or drag and drop
           </div>
           <div className="text-xs text-gray-400">
-            .txt / .tex / .md / .pdf (MAX. 25MB)
+            .txt / .tex / .md / .pdf (MAX. 4.5MB)
           </div>
 
           {fileLabel ? (
