@@ -9,6 +9,7 @@ type LatexTextProps = {
 
 const LATEX_MATH = /\\\[([\s\S]+?)\\\]|\\\(([\s\S]+?)\\\)|\$\$([\s\S]+?)\$\$|\$([^$\n]+)\$/g;
 const LATEX_SECTION = /\\section\{([^}]*)\}|\\subsection\{([^}]*)\}/g;
+const LATEX_LOOSE = /\\\[\s*([\s\S]+?)(?:\\\]|(?=["”']|$))|\\\(\s*([\s\S]+?)(?:\\\)|(?=["”']|$))/g;
 
 function renderMath(math: string, displayMode: boolean): string {
   return katex.renderToString(math, {
@@ -19,6 +20,52 @@ function renderMath(math: string, displayMode: boolean): string {
 }
 
 export default function LatexText({ text }: LatexTextProps) {
+  const renderPlainWithLooseMath = (
+    plainText: string,
+    keyPrefix: string,
+  ): React.ReactNode[] => {
+    const nodes: React.ReactNode[] = [];
+    let last = 0;
+    let key = 0;
+
+    for (const match of plainText.matchAll(LATEX_LOOSE)) {
+      const start = match.index ?? 0;
+      const end = start + match[0].length;
+      const before = plainText.slice(last, start);
+      if (before) {
+        nodes.push(
+          <React.Fragment key={`${keyPrefix}-txt-${key++}`}>
+            {before}
+          </React.Fragment>,
+        );
+      }
+
+      const displayMath = (match[1] ?? "").trim();
+      const inlineMath = (match[2] ?? "").trim();
+      const math = displayMath || inlineMath;
+      if (math) {
+        const displayMode = Boolean(displayMath);
+        nodes.push(
+          <span
+            key={`${keyPrefix}-math-${key++}`}
+            className={displayMode ? "block my-1" : undefined}
+            dangerouslySetInnerHTML={{ __html: renderMath(math, displayMode) }}
+          />,
+        );
+      }
+      last = end;
+    }
+
+    const tail = plainText.slice(last);
+    if (tail) {
+      nodes.push(
+        <React.Fragment key={`${keyPrefix}-txt-${key++}`}>{tail}</React.Fragment>,
+      );
+    }
+
+    return nodes.length > 0 ? nodes : [plainText];
+  };
+
   const renderPlainWithSections = (plainText: string): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     let plainLast = 0;
@@ -30,7 +77,7 @@ export default function LatexText({ text }: LatexTextProps) {
       const before = plainText.slice(plainLast, start);
       if (before) {
         nodes.push(
-          <React.Fragment key={`plain-txt-${plainKey++}`}>{before}</React.Fragment>,
+          ...renderPlainWithLooseMath(before, `plain-before-${plainKey++}`),
         );
       }
 
@@ -53,7 +100,7 @@ export default function LatexText({ text }: LatexTextProps) {
     const tail = plainText.slice(plainLast);
     if (tail) {
       nodes.push(
-        <React.Fragment key={`plain-txt-${plainKey++}`}>{tail}</React.Fragment>,
+        ...renderPlainWithLooseMath(tail, `plain-tail-${plainKey++}`),
       );
     }
 

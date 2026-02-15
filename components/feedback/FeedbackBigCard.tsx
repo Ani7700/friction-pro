@@ -8,6 +8,7 @@ import { noto_serif } from "@/app/fonts";
 import { Rating } from "flowbite-react";
 import { EngagmentVis } from "@/components/feedback/EngagmentVis";
 import { TbX, TbClipboardText } from "react-icons/tb";
+import LatexText from "@/components/essay/LatexText";
 import {
   cn,
   fetchData,
@@ -85,12 +86,17 @@ export const FeedbackBigCard = (props: FeedbackBigCardProps) => {
     const originalContentSentences = originalContent.split(/(?<=[.?!])\s+/);
 
     return newContentSentences.map((sentence, index) => {
+      const sentenceWithSpace = `${sentence} `;
       if (isSimilarSentence(sentence, originalContentSentences)) {
-        return <b key={index}>{sentence} </b>;
+        return (
+          <b key={index}>
+            <LatexText text={sentenceWithSpace} />
+          </b>
+        );
       } else {
         return (
           <span key={index} className="text-gray-300 font-normal">
-            {sentence}{" "}
+            <LatexText text={sentenceWithSpace} />
           </span>
         );
       }
@@ -204,7 +210,7 @@ export const FeedbackBigCard = (props: FeedbackBigCardProps) => {
                   noto_serif.className + " italic text-sm leading-6 pb-3"
                 }
               >
-                {props.feedbackItem.content}
+                <LatexText text={props.feedbackItem.content} />
               </p>
             )}
           </div>

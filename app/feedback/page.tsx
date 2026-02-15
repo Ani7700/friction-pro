@@ -73,17 +73,22 @@ const Feedback = () => {
   const getFeedbackBySentenceId = useFeedbackStore((state) => state.getFeedbackBySentenceId);
   const allFeedback = useFeedbackStore((state) => state.feedback);
 
-  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem[] | undefined>([]);
+  // Derive list on first paint so we don't show "No feedback available" before useEffect runs
+  const effectiveFeedback = useMemo(() => {
+    if (Object.keys(globalSentence).length === 0) return allFeedback ?? [];
+    return getFeedbackBySentenceId(globalSentence.id) ?? [];
+  }, [globalSentence, allFeedback, getFeedbackBySentenceId]);
+
+  const [selectedFeedback, setSelectedFeedback] = useState<FeedbackItem[]>(() => []);
 
   useEffect(() => {
-    if (Object.keys(globalSentence).length === 0) {
-      setSelectedFeedback(allFeedback);
-      return;
-    }
+    setSelectedFeedback(effectiveFeedback);
+  }, [effectiveFeedback]);
+
+  useEffect(() => {
+    if (Object.keys(globalSentence).length === 0) return;
 
     const feedbackForThisSentence = getFeedbackBySentenceId(globalSentence.id);
-    setSelectedFeedback(feedbackForThisSentence);
-
     const existingPlan = globalHumanPlan.find(
       (item) => item.sentence === globalSentence.content,
     );
@@ -101,7 +106,6 @@ const Feedback = () => {
     });
   }, [
     globalSentence,
-    allFeedback,
     globalHumanPlan,
     getFeedbackBySentenceId,
     initiateOneGlobalHumanPlan,
@@ -124,14 +128,14 @@ const Feedback = () => {
   }, [globalSentence]);
 
   const sortedFeedback = useMemo(() => {
-    const contentFeedback = selectedFeedback?.filter((item) => ![""].includes(item.type));
+    const contentFeedback = effectiveFeedback?.filter((item) => ![""].includes(item.type));
     if (!contentFeedback) return undefined;
 
     return [...contentFeedback].sort((a, b) => {
       if (a.source !== b.source) return b.source - a.source;
       return b.engagement - a.engagement;
     });
-  }, [selectedFeedback]);
+  }, [effectiveFeedback]);
 
   const uniqueFiles = useMemo(() => {
     const files = sortedFeedback?.map((item) => item.file) ?? [];
@@ -252,7 +256,7 @@ const Feedback = () => {
                   }`}
                   close={true}
                   selectedFeedback={selectedFeedback}
-                  setSelectedFeedback={setSelectedFeedback}
+                  setSelectedFeedback={(fb) => setSelectedFeedback(fb ?? [])}
                 />
                 <div className="border-t border-dashed border-gray-200 w-full" />
               </div>

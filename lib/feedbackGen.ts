@@ -55,6 +55,10 @@ function canonicalizeType(type: string): (typeof FEEDBACK_TYPES)[number] {
 function sentenceSnippet(sentence: string): string {
   const cleaned = sentence.replace(/\s+/g, " ").trim();
   if (!cleaned) return "this sentence";
+  // Keep full sentence when LaTeX is present so math delimiters are not truncated.
+  if (/\\\[|\\\]|\\\(|\\\)|\$\$|\$|\\[a-zA-Z]+\{/.test(cleaned)) {
+    return cleaned;
+  }
   return cleaned.length > 96 ? `${cleaned.slice(0, 93)}...` : cleaned;
 }
 

@@ -73,7 +73,7 @@ export const useEssayStore = create<EssayState & EssayActions>()(
           return { essay: state.essay };
         }),
     }),
-    { name: "essay", skipHydration: true },
+    { name: "essay", skipHydration: false },
   ),
 );
 
@@ -127,7 +127,7 @@ export const useFeedbackStore = create<FeedbackState & FeedbackActions>()(
         return feedbackItem?.plan.find((plan) => plan.sentence === sentence);
       },
     }),
-    { name: "feedback", skipHydration: true },
+    { name: "feedback", skipHydration: false },
   ),
 );
 

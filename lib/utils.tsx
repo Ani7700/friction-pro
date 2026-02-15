@@ -191,11 +191,17 @@ export const getOpenAICompletion = async (
     return response.choices[0].message.content;
   } catch (error: any) {
     console.error("Error fetching AI response:", error);
-    if (error.message.includes("Incorrect API key provided")) {
-      alert(
-        "Error fetching AI response: Incorrect API key provided. You can find your API key at https://platform.openai.com/account/api-keys.",
-      );
+    const msg = error?.message ?? String(error);
+    if (msg.includes("Incorrect API key") || msg.includes("Invalid API key")) {
+      throw new Error("Invalid OpenAI API key. Please check and try again. Find your key at https://platform.openai.com/account/api-keys");
     }
+    if (msg.includes("rate limit") || msg.includes("Rate limit")) {
+      throw new Error("Rate limit exceeded. Please try again later.");
+    }
+    if (msg.includes("network") || error?.name === "TypeError") {
+      throw new Error("Network error. Please check your connection and try again.");
+    }
+    throw new Error(msg || "Something went wrong while generating feedback. Please try again.");
   }
 };
 

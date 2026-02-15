@@ -18,10 +18,14 @@ type FileUploaderProps = {
     feedback: FeedbackSourceItem[],
     essay: string,
   ) => void | Promise<void>;
+  persistedError?: string;
+  onClearPersistedError?: () => void;
 };
 
 const MAX_FILE_SIZE_BYTES = 4.5 * 1024 * 1024;
 const PARTICIPANT_ID_REGEX = /^[a-zA-Z0-9_-]{1,32}$/;
+const SUBMIT_ERROR_KEY = "friction_submit_error";
+const PDF_PARSE_TIMEOUT_MS = 45_000;
 
 function isPdf(file: File): boolean {
   const ext = file.name.split(".").pop()?.toLowerCase();
@@ -33,28 +37,75 @@ function isSupportedTextFile(file: File): boolean {
   return ext === "txt" || ext === "tex" || ext === "md";
 }
 
-async function extractPdfText(file: File): Promise<string> {
+async function extractPdfTextInBrowser(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const loadingTask = pdfjs.getDocument({
+    data: bytes,
+    disableWorker: true,
+    useSystemFonts: true,
+  } as unknown as Parameters<typeof pdfjs.getDocument>[0]);
+  const pdf = await loadingTask.promise;
+  const pages: string[] = [];
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const text = content.items
+      .map((item) =>
+        "str" in (item as { str?: string })
+          ? (item as { str?: string }).str
+          : "",
+      )
+      .join(" ")
+      .trim();
+    pages.push(text);
+  }
+
+  return pages.join("\n\n");
+}
+
+async function tryExtractPdfTextViaApi(file: File): Promise<string | null> {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch("/api/pdf-extract", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!response.ok) {
-    let message = "Failed to parse PDF file.";
-    try {
-      const data = (await response.json()) as { error?: string };
-      if (data?.error) message = data.error;
-    } catch {
-      // Keep default message if response is not JSON.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PDF_PARSE_TIMEOUT_MS);
+  try {
+    const response = await fetch("/api/pdf-extract", {
+      method: "POST",
+      body: formData,
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      return null;
     }
-    throw new Error(message);
-  }
 
-  const data = (await response.json()) as { text?: string };
-  return data.text ?? "";
+    const data = (await response.json()) as { text?: string; error?: string };
+    if (!response.ok) {
+      throw new Error(data.error || "Failed to parse PDF file.");
+    }
+    if (typeof data.text !== "string") return null;
+    return data.text;
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("PDF parsing timed out. Please try a smaller file.");
+    }
+    const online = typeof navigator !== "undefined" ? navigator.onLine : true;
+    if (!online) {
+      throw new Error("Network error. Please check your connection and try again.");
+    }
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function extractPdfText(file: File): Promise<string> {
+  const fromApi = await tryExtractPdfTextViaApi(file);
+  if (fromApi !== null) return fromApi;
+  return extractPdfTextInBrowser(file);
 }
 
 async function extractEssayText(file: File): Promise<string> {
@@ -127,7 +178,18 @@ export function FileUploader(props: FileUploaderProps) {
   const [participantId, setParticipantId] = useState<string>("");
   const [selectedName, setSelectedName] = useState<string>("");
   const [uploadError, setUploadError] = useState<string>("");
+  const [submitError, setSubmitError] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(SUBMIT_ERROR_KEY);
+    if (stored) {
+      sessionStorage.removeItem(SUBMIT_ERROR_KEY);
+      setSubmitError(stored);
+    }
+  }, []);
+
+  const displayError = submitError || props.persistedError || "";
 
   const handleAPIInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setAPI(event.target.value);
@@ -172,14 +234,24 @@ export function FileUploader(props: FileUploaderProps) {
   }, [API, essayText, participantId]);
 
   return (
-    <div className="grid grid-cols-2 gap-2 p-8 bg-white rounded-lg border border-gray-800 w-[512px] select-none mb-32">
+    <div className="relative grid grid-cols-2 gap-2 p-8 bg-white rounded-lg border border-gray-800 w-[512px] select-none mb-32">
+      {isSubmitting ? (
+        <div
+          className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/90"
+          aria-hidden
+        >
+          <p className={noto_serif.className + " text-gray-600"}>
+            Generating feedback…
+          </p>
+        </div>
+      ) : null}
       <div className="col-span-2 flex flex-col gap-4">
         <p className={noto_serif.className}>Hi there! Welcome to Friction!</p>
       </div>
 
       <div className="col-span-2">
         <p className="text-sm mb-1 text-gray-400">Essay</p>
-        <DragAndDrop filesSetter={setEssay} />
+        <DragAndDrop filesSetter={isSubmitting ? () => {} : setEssay} />
         {selectedName ? (
           <p className="text-xs text-gray-400 mt-2">Selected: {selectedName}</p>
         ) : null}
@@ -194,12 +266,13 @@ export function FileUploader(props: FileUploaderProps) {
           value={participantId}
           placeholder="Participant ID (e.g. p01)"
           onChange={(event) => setParticipantId(event.target.value)}
-          className="w-full p-2 border text-sm border-gray-300 rounded-lg grow-0"
+          disabled={isSubmitting}
+          className="w-full p-2 border text-sm border-gray-300 rounded-lg grow-0 disabled:opacity-60 disabled:cursor-not-allowed"
         />
         {participantId.trim() !== "" &&
         !PARTICIPANT_ID_REGEX.test(participantId.trim()) ? (
           <p className="text-xs text-red-500">
-            ID 只能包含字母、数字、下划线或短横线，且最多 32 位。
+            ID may only contain letters, numbers, underscores or hyphens, up to 32 characters.
           </p>
         ) : null}
 
@@ -208,21 +281,35 @@ export function FileUploader(props: FileUploaderProps) {
           value={API}
           placeholder="Your OpenAI API Key..."
           onChange={handleAPIInputChange}
-          className="w-full p-2 border text-sm border-gray-300 rounded-lg grow-0"
+          disabled={isSubmitting}
+          className="w-full p-2 border text-sm border-gray-300 rounded-lg grow-0 disabled:opacity-60 disabled:cursor-not-allowed"
         />
 
+        {displayError ? (
+          <p className="text-xs text-red-500 col-span-2">{displayError}</p>
+        ) : null}
         <Button
           color="dark"
-          className="w-full"
+          className="w-full col-span-2"
           disabled={!canStart || isSubmitting}
           onClick={async () => {
             const normalizedId = participantId.trim();
             setFileSuffix(normalizedId);
             setEssayStore(parseEssayTextToSentences(essayText));
+            setSubmitError("");
+            props.onClearPersistedError?.();
+            sessionStorage.removeItem(SUBMIT_ERROR_KEY);
             setIsSubmitting(true);
             try {
               await props.onClick([], essayText);
               router.push("/feedback");
+            } catch (err) {
+              const message =
+                err instanceof Error
+                  ? err.message
+                  : "Failed to generate. Please check your network and API key, then try again.";
+              setSubmitError(message);
+              sessionStorage.setItem(SUBMIT_ERROR_KEY, message);
             } finally {
               setIsSubmitting(false);
             }

@@ -30,7 +30,7 @@ const NavBar = () => {
   return (
     <div className="flex flex-row bg-white gap-2 items-center font-medium text-base text-gray-400 w-full justify-center p-4 border-b border-gray-100 select-none">
       <Link
-        href="\feedback"
+        href="/feedback"
         className={cn(getLinkClassName("/feedback") + " w-20")}
         onClick={() => {
           setGlobalSentence({} as Sentence);
@@ -41,7 +41,7 @@ const NavBar = () => {
       </Link>
       <TbChevronsRight size={16} />
       <Link
-        href="\plan"
+        href="/plan"
         className={cn(getLinkClassName("/plan") + " w-12 text-center")}
         onClick={(e) => {
           // if globalSentence is empty, prevent navigation
@@ -55,7 +55,7 @@ const NavBar = () => {
       </Link>
       <TbChevronsRight size={16} />
       <Link
-        href="\revision"
+        href="/revision"
         className={cn(getLinkClassName("/revision") + " w-20")}
         onClick={(e) => {
           // if globalSentence is empty, prevent navigation

@@ -1,7 +1,6 @@
 "use client";
 
-import React from "react";
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   useEssayStore,
   useFileSuffixStore,
@@ -57,12 +56,25 @@ function setDistributionFromFeedback(
   }
 }
 
+const SUBMIT_ERROR_KEY = "friction_submit_error";
+
 const Upload = () => {
+  const [persistedError, setPersistedError] = useState("");
+
   useEffect(() => {
     useFileSuffixStore.getState().setFileSuffix("");
     eventTracker({
       event: "view_home_page",
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = sessionStorage.getItem(SUBMIT_ERROR_KEY);
+    if (stored) {
+      sessionStorage.removeItem(SUBMIT_ERROR_KEY);
+      setPersistedError(stored);
+    }
   }, []);
 
   const onClick = async (
@@ -78,12 +90,23 @@ const Upload = () => {
     if (isUserUpload) {
       const currentEssay = useEssayStore.getState().essay;
       if (currentEssay.length === 0) return;
-      const generated = await generateFeedbackForEssay(currentEssay);
-      useFeedbackStore.setState({ feedback: generated });
-      useFeedbackSummaryStore.setState({
-        feedbackSummary: buildFeedbackSummary(generated),
-      });
-      setDistributionFromFeedback(generated, currentEssay.length);
+      try {
+        const generated = await generateFeedbackForEssay(currentEssay);
+        useFeedbackStore.setState({ feedback: generated });
+        useFeedbackSummaryStore.setState({
+          feedbackSummary: buildFeedbackSummary(generated),
+        });
+        setDistributionFromFeedback(generated, currentEssay.length);
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Failed to generate. Please check your network and API key, then try again.";
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(SUBMIT_ERROR_KEY, message);
+        }
+        throw err;
+      }
     } else {
       useEssayStore.setState({ essay });
       useFeedbackStore.setState({ feedback });
@@ -97,7 +120,11 @@ const Upload = () => {
 
   return (
     <div className="bg-gray-50 text-gray-800 min-h-screen w-full flex items-center justify-center">
-      <FileUploader onClick={onClick} />
+      <FileUploader
+        onClick={onClick}
+        persistedError={persistedError}
+        onClearPersistedError={() => setPersistedError("")}
+      />
     </div>
   );
 };
